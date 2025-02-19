@@ -1,2 +1,10 @@
 # Release Builds
-This folder contains precompiled release builds for windows. MVTT.exe implements the default behaviour. The derivates with the postfixes _mx have the corresponding display preselected for ease of use.
+This folder contains precompiled release builds for windows.
+
+**MVTT.exe** implements the default behaviour
+
+**MVTT_m0.exe** allways selects Monitor 0
+
+**MVTT_m1.exe** allways selects Monitor 1
+
+**MVTT_m2.exe** allways selects Monitor 2 
