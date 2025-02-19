@@ -1,0 +1,2 @@
+# Release Builds
+This folder contains precompiled release builds for windows. MVTT.exe implements the default behaviour. The derivates with the postfixes _mx have the corresponding display preselected for ease of use.
