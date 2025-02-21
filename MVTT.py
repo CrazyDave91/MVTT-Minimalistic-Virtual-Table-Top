@@ -7,7 +7,7 @@ educational and informational purposes only. Use it at your own risk.
 """
 
 import sys
-from PyQt5.QtCore import Qt, QTimer, QRectF
+from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF
 from PyQt5.QtGui import QPixmap, QPen, QColor, QPainter, QImage
 from PyQt5.QtWidgets import (
     QApplication,
@@ -21,10 +21,22 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-# Standard-Pfad zum Bild – kann per Kommandozeilenparameter überschrieben werden
+# Default image path – falls kein Bild übergeben wird
 DEFAULT_IMAGE_PATH = "default.jpg"
 
-# Hilfsklasse: Interaktives Auswahlrechteck (ohne Rotation)
+# -----------------------------
+# Reveal Rectangle for Cover Mode (non-interactive after creation)
+# -----------------------------
+class RevealRect(QGraphicsRectItem):
+    def __init__(self, rect, parent=None):
+        super().__init__(rect, parent)
+        self.setPen(QPen(QColor(0, 255, 0), 2))
+        self.setBrush(QColor(0, 255, 0, 50))
+        self.setFlags(QGraphicsRectItem.GraphicsItemFlags(0))
+
+# -----------------------------
+# Selection Rectangle (always visible)
+# -----------------------------
 class SelectionRect(QGraphicsRectItem):
     def __init__(self, rect, parent=None):
         super().__init__(rect, parent)
@@ -35,11 +47,20 @@ class SelectionRect(QGraphicsRectItem):
         )
         self.setPen(QPen(QColor(255, 0, 0), 2))
         self.setBrush(QColor(255, 0, 0, 50))
+        self.moving = False  # Flag to indicate if the rectangle is being moved
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.moving = True
+        super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.moving = False
+        super().mouseReleaseEvent(event)
     
     def wheelEvent(self, event):
-        # Skalierung per Mausrad (bei gedrückter Shift-Taste)
         if event.modifiers() & Qt.ShiftModifier:
-            # QGraphicsSceneWheelEvent unterstützt kein angleDelta(), daher event.delta()
             delta = event.delta()
             factor = 1.0 + (delta / 2000.0)
             rect = self.rect()
@@ -49,28 +70,68 @@ class SelectionRect(QGraphicsRectItem):
         else:
             super().wheelEvent(event)
 
-# Hauptansicht: Zeigt das Bild und das Auswahlrechteck
+# -----------------------------
+# Main View: Displays the image and handles creation of reveal rectangles in Cover Mode
+# -----------------------------
 class MainView(QGraphicsView):
-    def __init__(self, scene, parent=None):
+    def __init__(self, scene, main_window, parent=None):
         super().__init__(scene, parent)
+        self.main_window = main_window
         self.setRenderHint(QPainter.Antialiasing)
         self.setDragMode(QGraphicsView.RubberBandDrag)
         self.setMouseTracking(True)
         self.setBackgroundBrush(Qt.white)
+        self._reveal_start = None
+        self._temp_reveal_item = None
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Skaliere das Bild so, dass es das Fenster ausfüllt, behalte dabei das Seitenverhältnis bei.
         self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
 
-# Zweites Fenster: Zeigt den ausgewählten Bildausschnitt
+    def mousePressEvent(self, event):
+        if self.main_window.coverModeEnabled and event.button() == Qt.LeftButton:
+            # Begin drawing a new reveal rectangle in Cover Mode
+            self._reveal_start = self.mapToScene(event.pos())
+            self._temp_reveal_item = QGraphicsRectItem(QRectF(self._reveal_start, self._reveal_start))
+            self._temp_reveal_item.setPen(QPen(QColor(0, 255, 0), 2))
+            self._temp_reveal_item.setBrush(QColor(0, 255, 0, 50))
+            self._temp_reveal_item.setFlags(QGraphicsRectItem.GraphicsItemFlags(0))
+            self.scene().addItem(self._temp_reveal_item)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._reveal_start is not None:
+            current_point = self.mapToScene(event.pos())
+            rect = QRectF(self._reveal_start, current_point).normalized()
+            self._temp_reveal_item.setRect(rect)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._reveal_start is not None and event.button() == Qt.LeftButton:
+            final_rect = self._temp_reveal_item.rect()
+            if final_rect.width() > 5 and final_rect.height() > 5:
+                permanent_reveal = RevealRect(final_rect)
+                self.scene().addItem(permanent_reveal)
+                self.main_window.reveal_rectangles.append(permanent_reveal)
+            self.scene().removeItem(self._temp_reveal_item)
+            self._temp_reveal_item = None
+            self._reveal_start = None
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+# -----------------------------
+# Second Window: Displays the composed image (non-interactive)
+# -----------------------------
 class SecondWindow(QWidget):
     def __init__(self, screen_geometry, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Second Screen")
-        # Setze das Fenster selbst schwarz
         self.setStyleSheet("background-color: black;")
-        # Positioniere das Fenster auf dem gewünschten Monitor (oder dem primären, falls nur einer vorhanden ist)
         self.setGeometry(screen_geometry)
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -86,24 +147,29 @@ class SecondWindow(QWidget):
     def updateImage(self, pixmap: QPixmap):
         self.label.setPixmap(pixmap)
 
-# Hauptfenster, das beide Fenster verwaltet
+# -----------------------------
+# Main Window: Manages both windows and mode toggling
+# -----------------------------
 class MainWindow(QMainWindow):
     def __init__(self, image_path, monitor_index=None):
         super().__init__()
-        self.setWindowTitle("Main Screen")
-        # Lade das Bild als QImage (für exakte Kopien) und als QPixmap (für die Szene)
+        # Start in Cover Mode (Maskiermodus)
+        self.coverModeEnabled = True  
+        self.setWindowTitle("MVTT - Cover Mode")
+        
+        # Load main image (for processing and display)
         self.image = QImage(image_path)
         if self.image.isNull():
-            print("Fehler: Bild konnte nicht geladen werden.")
+            print("Error: Could not load image.")
             sys.exit(1)
         self.pixmap = QPixmap.fromImage(self.image)
         
-        # Erstelle eine Szene, deren Koordinaten dem Originalbild entsprechen
+        # Create scene with coordinates matching the main image
         self.scene = QGraphicsScene(0, 0, self.image.width(), self.image.height())
         self.pixmap_item = QGraphicsPixmapItem(self.pixmap)
         self.scene.addItem(self.pixmap_item)
         
-        # Bestimme den Monitor für das zweite Fenster
+        # Determine monitor for second window
         screens = QApplication.screens()
         if monitor_index is None:
             if len(screens) > 1:
@@ -118,8 +184,7 @@ class MainWindow(QMainWindow):
         self.second_screen_geometry = second_screen.geometry()
         aspect_ratio = self.second_screen_geometry.width() / self.second_screen_geometry.height()
         
-        # Starte mit einem Auswahlrechteck, das z. B. 1/3 der Bildbreite hat,
-        # und dessen Höhe anhand des Monitor-Seitenverhältnisses berechnet wird.
+        # Create red selection rectangle (always visible)
         rect_width = self.image.width() / 3
         rect_height = rect_width / aspect_ratio
         init_rect = QRectF(
@@ -131,67 +196,66 @@ class MainWindow(QMainWindow):
         self.selection_rect = SelectionRect(init_rect)
         self.scene.addItem(self.selection_rect)
         
-        # Erstelle die Hauptansicht und passe sie an
-        self.view = MainView(self.scene)
+        # Persistent list for reveal rectangles (for Cover Mode)
+        self.reveal_rectangles = []
+        
+        self.view = MainView(self.scene, self)
         self.setCentralWidget(self.view)
         self.resize(self.image.width() // 2, self.image.height() // 2)
         self.show()
         
-        # Erstelle das zweite Fenster (auf dem gewünschten Monitor)
         self.second_window = SecondWindow(self.second_screen_geometry)
         
-        # Timer zum regelmäßigen Aktualisieren des zweiten Fensters
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateSecondWindow)
-        self.timer.start(30)  # ca. 33 FPS
-        
+        self.timer.start(30)
+    
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_C:
+            # Toggle between Normal Mode and Cover Mode
+            self.coverModeEnabled = not self.coverModeEnabled
+            mode_text = "Cover Mode" if self.coverModeEnabled else "Normal Mode"
+            self.setWindowTitle(f"MVTT - {mode_text}")
+        else:
+            super().keyPressEvent(event)
+    
     def updateSecondWindow(self):
-        # Ermittle das Auswahlrechteck in Szene-Koordinaten
-        mapped_rect = self.selection_rect.mapRectToScene(self.selection_rect.rect())
-        sel_rect = mapped_rect.toRect()  # Ganzzahliger Bereich des Auswahlrechtecks
-        
-        # Erstelle ein neues QImage in der Größe des Auswahlrechtecks, schwarz gefüllt
+        # Always use the area defined by the red selection rectangle as base.
+        sel_rect = self.selection_rect.mapRectToScene(self.selection_rect.rect()).toRect()
+        # In both Modi, es wird nur der unmaskierte Teil (das durch Reveal-Rechtecke freigelegte Gebiet)
+        # aus dem Bereich des roten Rechtecks angezeigt.
         composite = QImage(sel_rect.size(), QImage.Format_ARGB32)
         composite.fill(Qt.black)
-        
-        # Berechne die Überschneidung des Auswahlrechtecks mit dem Originalbild
-        intersection = sel_rect.intersected(self.image.rect())
-        if not intersection.isEmpty():
-            # Kopiere den überlappenden Teil aus dem Originalbild
-            sub_image = self.image.copy(intersection)
-            # Berechne den Versatz im composite, falls das Auswahlrechteck teilweise außerhalb liegt
-            offset_x = intersection.x() - sel_rect.x()
-            offset_y = intersection.y() - sel_rect.y()
-            painter = QPainter(composite)
-            painter.drawImage(offset_x, offset_y, sub_image)
-            painter.end()
-        
-        # Konvertiere das composite Bild in ein QPixmap
+        for reveal in self.reveal_rectangles:
+            r = reveal.mapRectToScene(reveal.rect()).toRect()
+            intersection = r.intersected(sel_rect)
+            if not intersection.isEmpty():
+                sub_image = self.image.copy(intersection)
+                painter = QPainter(composite)
+                offset = QPointF(intersection.x() - sel_rect.x(), intersection.y() - sel_rect.y())
+                painter.drawImage(offset, sub_image)
+                painter.end()
         pixmap = QPixmap.fromImage(composite)
-        # Skaliere das Pixmap, dabei das Seitenverhältnis beibehalten
-        scaled_pixmap = pixmap.scaled(self.second_screen_geometry.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         
-        # Erstelle ein finales QPixmap, das exakt die Fenstergröße hat und fülle es mit Schwarz
+        scaled_pixmap = pixmap.scaled(
+            self.second_screen_geometry.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
         final_pixmap = QPixmap(self.second_screen_geometry.size())
         final_pixmap.fill(Qt.black)
         painter = QPainter(final_pixmap)
-        # Zentriere das skalierte Pixmap
         x = (final_pixmap.width() - scaled_pixmap.width()) // 2
         y = (final_pixmap.height() - scaled_pixmap.height()) // 2
         painter.drawPixmap(x, y, scaled_pixmap)
         painter.end()
-        
         self.second_window.updateImage(final_pixmap)
     
     def closeEvent(self, event):
-        # Schließe auch das zweite Fenster, wenn das Hauptfenster geschlossen wird.
         self.second_window.close()
         event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    # Erlaube einen Parameter beim Start: Der erste Parameter ist das Bild,
-    # der zweite (optional) der Index des Monitors für das zweite Fenster.
+    # Command-line parameter: first parameter is the image path, second (optional) is the monitor index.
     image_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_IMAGE_PATH
     monitor_index = int(sys.argv[2]) if len(sys.argv) > 2 else None
     window = MainWindow(image_path, monitor_index)
