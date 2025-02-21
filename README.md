@@ -22,7 +22,7 @@ The tool displays an image on two windows:
 Just drag the image you want to display onto the MVTT.exe. It will automatically start with that image on the default display.
 
 #### Running the EXE with Parameters
-You can launch the tool from the command line with parameters:
+You can launch the tool from the command line or from a batchfile with parameters. You can find example batch files in the **Builds** folder:
 - **First Parameter:** The path to the image file you want to display.
 - **Second Parameter (Optional):** The index of the monitor on which to display the second window. If not provided, the tool will use the second monitor if available, or the primary monitor if only one exists.
 
