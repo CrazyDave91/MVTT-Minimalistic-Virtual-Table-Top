@@ -2,14 +2,14 @@
 # MVTT-Minimalistic-Virtual-Table-Top
 This tool is meant to be used in conjunction with a table TV for tabletop games like D&amp;D, Pathfinder and DSA. It shows a fullscreen image on the table TV, that is easily controlled by a mini version on the preview screen. A masking feature also allows for hidden areas on the map.
 
-<a href="/Builds/20250221/" download>Download latest build for WIndows here</a>
+<a href="/Builds/" download>Download latest build for Windows here</a>
 
 ![Example of a setup with a table TV](ExampleSetup.jpg)
 
 ## User Guide
 
 ### <ins>Moving and Scaling View</ins>
-**Shift** + **Mouser Left Click** + Drag: Move View Rectangle (red)
+**Shift** + **Mouser Left Click** + **Drag**: Move View Rectangle (red)
 
 **Shift** + **Mouse Scroll**: Scale the View Rectangle (red)
 
