@@ -8,7 +8,7 @@ This tool is meant to be used in conjunction with a table TV for tabletop games 
 
 ## User Guide
 
-### Moving ans Scaling View
+### <ins>Moving and Scaling View</ins>
 **Shift** + **Mouser Left Click** + Drag: Move View Rectangle (red)
 
 **Shift** + **Mouse Scroll**: Scale the View Rectangle (red)
@@ -18,24 +18,24 @@ This tool is meant to be used in conjunction with a table TV for tabletop games 
 **Hint** The yellow dots surrounding the red view rectangle represent a grid of 1 inch or 2,54mm to aid correct scaling without the need of watching the table TV. This feature doesn't work for every setup, as some drivers don't support reading out the actual monitor size.
 <table><tr><td> <img src="Images/Pre_Zoom.png" alt="Example befor Zooming"> </td><td align="center">&#8594;<br>Shift + Scroll<br>&#8594;</td><td> <img src="Images/Post_Reset.png" alt="Example after Zooming"> </td></tr></table>
 
-### Masking aka. Fog of War
+### <ins>Masking aka. Fog of War</ins>
 **Mouser Left Click** + **Drag**: Create a new masking rectangle (green)
 <table><tr><td> <img src="Images/Pre_Select.png" alt="Example befor Masking"> </td><td align="center">&#8594;<br>Left Click + Drag<br>&#8594;</td><td> <img src="Images/Pre_Invert.png" alt="Example after Masking"> </td></tr></table>
 
-### Mask Inversion
+### <ins>Mask Inversion</ins>
 **Shortcut I**: Invert the masking
 <table><tr><td> <img src="Images/Pre_Invert.png" alt="Example befor Mask Inversion"> </td><td align="center">&#8594;<br>[I]<br>&#8594;</td><td> <img src="Images/Post_Invert.png" alt="Example after Mask Inversion"> </td></tr></table>
 
-### Mask Reset
+### <ins>Mask Reset</ins>
 **Shortcut R**: Remove all masking rectangles (green)
 <table><tr><td> <img src="Images/Post_Invert.png" alt="Example befor Masking"> </td><td align="center">&#8594;<br>[R]<br>&#8594;</td><td> <img src="Images/Post_Reset.png" alt="Example after Masking"> </td></tr></table>
 
 
 ## How to Start the Executable
-### The easy way
+### <ins>The easy way</ins>
 Just drag the image you want to display onto the MVTT.exe. It will automatically start with that image on the default display.
 
-### Running the EXE with Parameters
+### <ins>With Parameters</ins>
 You can launch the tool from the command line or from a batchfile with parameters. You can find example batch files in the **Builds** folder:
 - **First Parameter:** The path to the image file you want to display.
 - **Second Parameter (Optional):** The index of the monitor on which to display the second window. If not provided, the tool will use the second monitor if available, or the primary monitor if only one exists.
