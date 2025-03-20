@@ -4,7 +4,7 @@ This tool is meant to be used in conjunction with a table TV for tabletop games 
 
 <a href="/Builds/" download>Download latest build for Windows here</a>
 
-![Example of a setup with a table TV](ExampleSetup.jpg)
+![Example of a setup with a table TV](/Images/ExampleSetup.jpg)
 
 ## User Guide
 
