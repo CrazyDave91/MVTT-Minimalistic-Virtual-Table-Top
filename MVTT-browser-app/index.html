@@ -1,0 +1,81 @@
+<!--
+  This code was created with GitHub Copilot.
+  This codebase is released under the MIT License.
+  Use at your own risk. Provided "as is", without warranties of any kind.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MVTT Local Battlemap Controller</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="layout">
+    <section id="gmPanel" class="panel">
+      <header class="top-row" aria-label="GM controls and status">
+        <div class="toolbar" aria-label="GM controls">
+          <h1 class="brand">MVTT</h1>
+
+          <label class="icon-button file-button" title="Load image" aria-label="Load image">
+            <img class="icon-svg" src="icons/image.svg" alt="" />
+            <span class="button-text">Load Image</span>
+            <input id="imageInput" type="file" accept="image/*" />
+          </label>
+
+          <button id="openPlayerButton" class="icon-button" type="button" title="Open player window" aria-label="Open player window">
+            <img class="icon-svg" src="icons/tv.svg" alt="" />
+            <span class="button-text">Open Player Window</span>
+          </button>
+          <button id="rotateButton" class="icon-button" type="button" title="Rotate image 90°" aria-label="Rotate image 90 degrees">
+            <img class="icon-svg" src="icons/rotate.svg" alt="" />
+            <span class="button-text">Rotate</span>
+          </button>
+          <button id="undoButton" class="icon-button" type="button" title="Undo last action" aria-label="Undo last action">
+            <img class="icon-svg" src="icons/undo.svg" alt="" />
+            <span class="button-text">Revert Last</span>
+          </button>
+          <button id="resetFogButton" class="icon-button" type="button" title="Reset fog" aria-label="Reset fog">
+            <img class="icon-svg" src="icons/reset.svg" alt="" />
+            <span class="button-text">Reset</span>
+          </button>
+        </div>
+
+        <div class="legend compact" aria-label="Interaction legend">
+          <span class="legend-title">Legend:</span>
+          <span class="legend-item">
+            <i class="legend-icon"><img class="legend-svg" src="icons/mouse-left-click.svg" alt="" /></i>
+            move
+          </span>
+          <span class="legend-item">
+            <i class="legend-icon"><img class="legend-svg" src="icons/mouse-left-click.svg" alt="" /></i>
+            scale
+          </span>
+          <span class="legend-item">
+            <i class="legend-icon"><img class="legend-svg" src="icons/mouse-right-click.svg" alt="" /></i>
+            reveal
+          </span>
+        </div>
+      </header>
+
+      <div class="canvas-shell">
+        <div id="canvasStatusOverlay" class="canvas-status-overlay" aria-live="polite">
+          <div id="statusLineSecondary" class="status-line" hidden>Open player window to show the image to your player.</div>
+          <div id="statusLineCritical" class="status-line status-critical" hidden></div>
+        </div>
+        <canvas id="gmCanvas"></canvas>
+      </div>
+    </section>
+
+    <section id="playerPanel" class="player-only panel">
+      <div id="playerHint" class="player-hint">Double click for fullscreen</div>
+      <div class="canvas-shell player-canvas-shell">
+        <canvas id="playerCanvas"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

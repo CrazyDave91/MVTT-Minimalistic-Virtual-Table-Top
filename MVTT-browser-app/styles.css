@@ -1,0 +1,254 @@
+/*
+ * This code was created with GitHub Copilot.
+ * This codebase is released under the MIT License.
+ * Use at your own risk. Provided "as is", without warranties of any kind.
+ */
+
+:root {
+  --bg: #0c1117;
+  --panel: #101722;
+  --ink: #e7edf8;
+  --muted: #98a8bf;
+  --line: #27364a;
+  --accent: #55b8ff;
+  --accent-strong: #2b9df0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 12%, #1b2738 0%, transparent 34%),
+    radial-gradient(circle at 82% 88%, #162131 0%, transparent 32%),
+    linear-gradient(145deg, #090d13, #111a26);
+}
+
+.layout {
+  height: 100%;
+}
+
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 8px;
+}
+
+.top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(16, 23, 34, 0.94);
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.brand {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #eaf2ff;
+}
+
+.icon-button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  background: #d9ecff;
+  color: #102033;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.icon-button:hover {
+  border-color: #bfe3ff;
+  background: #f2f9ff;
+  color: #0b1828;
+  box-shadow: 0 0 0 1px rgba(85, 184, 255, 0.35);
+}
+
+.file-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.icon-svg {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+.button-text {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.aspect-info {
+  margin-left: 4px;
+  font-size: 0.74rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.manual-link {
+  color: #9fcbff;
+  text-decoration: none;
+  font-size: 0.76rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #121f2f;
+  flex-shrink: 0;
+}
+
+.manual-link:hover {
+  border-color: var(--accent);
+  color: #dff0ff;
+}
+
+.legend.compact {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.legend-title {
+  font-size: 0.73rem;
+  color: #c8d8ee;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 2px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.74rem;
+  color: #e4efff;
+}
+
+.legend-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #b7d7ff;
+  background: #e8f4ff;
+}
+
+.legend-svg {
+  width: 15px;
+  height: 15px;
+  color: #0f2f4e;
+}
+
+.canvas-shell {
+  position: relative;
+  flex: 1;
+  min-height: 360px;
+  border: 1px solid #25364b;
+  border-radius: 10px;
+  background: #090f17;
+  overflow: hidden;
+}
+
+.canvas-status-overlay {
+  position: absolute;
+  display: none;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.player-only {
+  display: none;
+  background: #000;
+  color: #e9eff8;
+  padding: 0;
+}
+
+.player-only .player-canvas-shell {
+  border: 0;
+  border-radius: 0;
+  min-height: 100vh;
+}
+
+.player-hint {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 3px 7px;
+  font-size: 0.68rem;
+  color: #d2deef;
+  background: rgba(8, 13, 20, 0.56);
+  border: 1px solid rgba(122, 159, 197, 0.32);
+  border-radius: 999px;
+}
+
+:fullscreen .player-hint,
+:-webkit-full-screen .player-hint {
+  display: none;
+}
+
+.player-mode #gmPanel {
+  display: none;
+}
+
+.player-mode .player-only {
+  display: flex;
+}
+
+@media (max-width: 900px) {
+  .brand,
+  .aspect-info {
+    display: none;
+  }
+}
