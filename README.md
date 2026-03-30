@@ -9,7 +9,7 @@ To start, just double-click `MVTT-browser-app/index.html` and follow the instruc
 
 To open the second view, click "Open Player Window" and move that window to the connected table TV.
 
-**Download** the folder [MVTT-browser-app](MVTT-browser-app).
+**Download** and unzip [MVTT-browser-app/MVTT-browser-app.zip](MVTT-browser-app/MVTT-browser-app.zip).
 
 # MVTT Executable App
 This version is more streamlined and can detect the table TV automatically, but it may require you to allow running unsigned executables (see "Executable App first Execution" below).
