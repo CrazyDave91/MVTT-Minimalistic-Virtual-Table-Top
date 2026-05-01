@@ -26,7 +26,7 @@ This is the control screen with the following control elements:
 - **Rotate**: Rotates the view by 90°.
 - **Revert Last Change**: Reverts the last change (can be used multiple times).
 - **Reset Fog**: Resets the fog of war, covering the entire image again.
-- **Grid**: Select a screen size to show a 1" (2,54cm) gird.
+- **Grid**: Select a screen size to show a 1" (2,54cm) grid.
 - **Red-Rectangle**: Selects what is shown on the table TV.
     - **Left-click, hold and drag a corner**: Rescales the table TV view.
     - **Left-click, hold and drag the center**: Moves the table TV view.
