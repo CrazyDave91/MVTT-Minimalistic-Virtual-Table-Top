@@ -26,10 +26,13 @@ This is the control screen with the following control elements:
 - **Rotate**: Rotates the view by 90°.
 - **Revert Last Change**: Reverts the last change (can be used multiple times).
 - **Reset Fog**: Resets the fog of war, covering the entire image again.
+- **Grid**: Select a screen size to show a 1" (2,54cm) gird.
 - **Red-Rectangle**: Selects what is shown on the table TV.
     - **Left-click, hold and drag a corner**: Rescales the table TV view.
     - **Left-click, hold and drag the center**: Moves the table TV view.
     - **Right-click, hold and draw a rectangle**: Removes fog of war.
+- **Blue-Corners**: 
+	- **Left-click, hold and drag a corner**: Rescales the battlemap.
 
 # Executable App first Execution ("Windows Protected Your PC" Warning)
 When first starting the prebuilt version, you may get a message stating: "Windows Defender SmartScreen prevented an unrecognizable app from starting. Running this app might put your PC at risk."

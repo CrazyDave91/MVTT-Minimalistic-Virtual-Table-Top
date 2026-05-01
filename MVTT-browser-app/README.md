@@ -17,7 +17,7 @@ A local, no-install browser application for dual-screen tabletop sessions.
 ## Setup
 
 1. Open `battlemap-local-app/index.html` in a modern browser.
-2. In GM view, click **Open or Focus Player Window**.
+2. In GM view, click **Open Player Window**.
 3. Move the player window to the TV and double click inside the player window to enter fullscreen.
 
 Note:
@@ -27,11 +27,16 @@ Note:
 ## GM Controls
 
 - **Load image**: load map image from local disk.
+- **Left drag blue image corner handles**: scale the map preview in GM view.
 - **Left drag center of red box**: move viewport.
 - **Left drag corners of red box**: resize viewport, ratio preserved.
 - **Right drag**: create reveal rectangle in fog.
 - **Undo Last Action**: reverts last viewport/fog action.
 - **Reset Fog To Start**: keeps image and viewport, removes all reveals.
+
+Viewport behavior:
+- The red viewport is no longer clamped to image bounds.
+- If the viewport is partially or fully outside the image, the player view shows black in invalid regions.
 
 Aspect ratio behavior:
 - The red viewport ratio is synchronized automatically from the player window size.

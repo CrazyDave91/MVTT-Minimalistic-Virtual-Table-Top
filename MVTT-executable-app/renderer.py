@@ -8,6 +8,7 @@ All draw operations produce a PIL.Image that is then displayed via ImageTk.Photo
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from PIL import Image, ImageDraw
@@ -15,6 +16,10 @@ from PIL import Image, ImageDraw
 from state import AppState, Rect
 
 HANDLE_SIZE = 10
+IMAGE_HANDLE_COLOR = (74, 170, 255)
+IMAGE_HANDLE_ACTIVE_COLOR = (110, 193, 255)
+
+_scaled_render_cache: dict[tuple[int, int, int], Image.Image] = {}
 
 # Attempt to load a system font for canvas placeholder text.
 _FONT_PATHS = [
@@ -68,6 +73,46 @@ def intersect_rects(a: Rect, b: Rect) -> Optional[Rect]:
     return Rect(x, y, right - x, bottom - y)
 
 
+def _draw_grid_on_viewport(
+    frame: Image.Image,
+    vx: int,
+    vy: int,
+    vw: int,
+    vh: int,
+    monitor_inches: float,
+    player_aspect: float,
+) -> None:
+    """Composites a 1-inch grid overlay onto the viewport area of the frame."""
+    if monitor_inches <= 0 or vw <= 0 or vh <= 0 or player_aspect <= 0:
+        return
+
+    sqrt_term = math.sqrt(player_aspect ** 2 + 1)
+    cell_w = vw * sqrt_term / (monitor_inches * player_aspect)
+    cell_h = vh * sqrt_term / monitor_inches
+
+    if cell_w < 2 or cell_h < 2:
+        return
+
+    overlay = Image.new("RGBA", (vw, vh), (0, 0, 0, 0))
+    grid_draw = ImageDraw.Draw(overlay)
+
+    x = 0.0
+    while x <= vw:
+        xi = round(x)
+        grid_draw.line([(xi, 0), (xi, vh)], fill=(255, 255, 255, 64), width=1)
+        x += cell_w
+
+    y = 0.0
+    while y <= vh:
+        yi = round(y)
+        grid_draw.line([(0, yi), (vw, yi)], fill=(255, 255, 255, 64), width=1)
+        y += cell_h
+
+    crop = frame.crop((vx, vy, vx + vw, vy + vh)).convert("RGBA")
+    composited = Image.alpha_composite(crop, overlay).convert("RGB")
+    frame.paste(composited, (vx, vy))
+
+
 def render_gm(
     canvas_w: int,
     canvas_h: int,
@@ -76,6 +121,8 @@ def render_gm(
     interaction_preview: Optional[Rect] = None,
     active_handle: Optional[str] = None,
     status_text: str = "",
+    grid_monitor_inches: float = 0.0,
+    player_aspect: float = 16 / 9,
 ) -> Image.Image:
     """
     Renders the full GM canvas:
@@ -94,18 +141,20 @@ def render_gm(
     tx, ty, tw, th = compute_contain_transform(
         canvas_w, canvas_h, state.image_width, state.image_height
     )
-    scaled = image.resize((tw, th), Image.BILINEAR)
-    frame.paste(scaled, (tx, ty))
 
-    # Apply 35% opacity fog overlay to the full image area.
-    fog = Image.new("RGBA", (tw, th), (0, 0, 0, 89))
-    base_crop = frame.crop((tx, ty, tx + tw, ty + th)).convert("RGBA")
+    fx, fy, fw, fh = compute_scaled_frame(tx, ty, tw, th, state.image_scale)
+    scaled = get_scaled_render_image(image, fw, fh)
+    frame.paste(scaled, (fx, fy))
+
+    # Apply 65% opacity fog overlay to the full image area.
+    fog = Image.new("RGBA", (fw, fh), (0, 0, 0, 166))
+    base_crop = frame.crop((fx, fy, fx + fw, fy + fh)).convert("RGBA")
     fogged = Image.alpha_composite(base_crop, fog).convert("RGB")
-    frame.paste(fogged, (tx, ty))
+    frame.paste(fogged, (fx, fy))
 
     # Restore revealed areas through the fog.
-    scale_x = tw / state.image_width
-    scale_y = th / state.image_height
+    scale_x = fw / state.image_width
+    scale_y = fh / state.image_height
 
     for reveal in state.reveals:
         src_x = int(reveal.x * scale_x)
@@ -113,16 +162,19 @@ def render_gm(
         src_w = max(1, int(reveal.width * scale_x))
         src_h = max(1, int(reveal.height * scale_y))
         crop = scaled.crop((src_x, src_y, src_x + src_w, src_y + src_h))
-        frame.paste(crop, (int(tx + reveal.x * scale_x), int(ty + reveal.y * scale_y)))
+        frame.paste(crop, (int(fx + reveal.x * scale_x), int(fy + reveal.y * scale_y)))
 
     # Draw viewport rectangle.
-    vx = int(tx + state.viewport.x * scale_x)
-    vy = int(ty + state.viewport.y * scale_y)
+    vx = int(fx + state.viewport.x * scale_x)
+    vy = int(fy + state.viewport.y * scale_y)
     vw = int(state.viewport.width * scale_x)
     vh = int(state.viewport.height * scale_y)
 
     draw = ImageDraw.Draw(frame)
     draw.rectangle([vx, vy, vx + vw, vy + vh], outline=(255, 47, 47), width=2)
+
+    # Draw 1-inch grid overlay inside the viewport when a monitor size is selected.
+    _draw_grid_on_viewport(frame, vx, vy, vw, vh, grid_monitor_inches, player_aspect)
 
     # Draw corner handles.
     corners = {
@@ -136,10 +188,24 @@ def render_gm(
         half = size // 2
         draw.rectangle([hx - half, hy - half, hx + half, hy + half], fill=(255, 47, 47))
 
+    # Draw image corner handles (separate from viewport handles).
+    image_corners = {
+        "image-nw": (fx, fy),
+        "image-ne": (fx + fw, fy),
+        "image-se": (fx + fw, fy + fh),
+        "image-sw": (fx, fy + fh),
+    }
+    for handle, (hx, hy) in image_corners.items():
+        is_active = handle == active_handle
+        size = HANDLE_SIZE * 2 if is_active else HANDLE_SIZE
+        half = size // 2
+        color = IMAGE_HANDLE_ACTIVE_COLOR if is_active else IMAGE_HANDLE_COLOR
+        draw.rectangle([hx - half, hy - half, hx + half, hy + half], fill=color)
+
     # Draw reveal-in-progress dashed preview.
     if interaction_preview is not None:
-        px = int(tx + interaction_preview.x * scale_x)
-        py = int(ty + interaction_preview.y * scale_y)
+        px = int(fx + interaction_preview.x * scale_x)
+        py = int(fy + interaction_preview.y * scale_y)
         pw = int(interaction_preview.width * scale_x)
         ph = int(interaction_preview.height * scale_y)
         draw.rectangle([px, py, px + pw, py + ph], outline=(255, 255, 255), width=1)
@@ -168,6 +234,8 @@ def render_player(
         return frame
 
     vp = state.viewport
+    if vp.width <= 0 or vp.height <= 0:
+        return frame
 
     for reveal in state.reveals:
         intersect = intersect_rects(reveal, vp)
@@ -191,6 +259,33 @@ def render_player(
         frame.paste(crop, (dx, dy))
 
     return frame
+
+
+def compute_scaled_frame(
+    tx: int, ty: int, tw: int, th: int, image_scale: float
+) -> tuple[int, int, int, int]:
+    """Returns centered scaled frame based on contain transform and image_scale."""
+    draw_w = max(1, int(tw * image_scale))
+    draw_h = max(1, int(th * image_scale))
+    draw_x = int(tx + (tw - draw_w) / 2)
+    draw_y = int(ty + (th - draw_h) / 2)
+    return draw_x, draw_y, draw_w, draw_h
+
+
+def get_scaled_render_image(image: Image.Image, width: int, height: int) -> Image.Image:
+    """Returns a cached scaled image for the target render size."""
+    key = (id(image), width, height)
+    cached = _scaled_render_cache.get(key)
+    if cached is not None:
+        return cached
+
+    resized = image.resize((width, height), Image.BILINEAR)
+    _scaled_render_cache[key] = resized
+
+    if len(_scaled_render_cache) > 12:
+        _scaled_render_cache.pop(next(iter(_scaled_render_cache)))
+
+    return resized
 
 
 def _draw_centered_text(

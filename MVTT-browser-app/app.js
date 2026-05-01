@@ -9,12 +9,15 @@ const STORAGE_KEY = "mvtt_local_state_v1";
 const SYNC_INTERVAL_MS = 1000;
 const HANDLE_SIZE_PX = 10;
 const MIN_VIEWPORT_SIZE_PX = 40;
+const MIN_IMAGE_SCALE = 0.2;
+const MAX_IMAGE_SCALE = 3.0;
 
 const initialState = {
   imageSrc: null,
   imageWidth: 0,
   imageHeight: 0,
   imageRotation: 0,
+  image_scale: 1.0,
   viewport: { x: 0, y: 0, width: 0, height: 0 },
   reveals: [],
 };
@@ -36,6 +39,7 @@ const runtime = {
   statusLevel: "info",
   playerAspectRatio: 16 / 9,
   hoverHitType: "none",
+  gridMonitorInches: 0,
 };
 
 initialize();
@@ -133,12 +137,17 @@ function setupGmUi() {
   const rotateButton = document.getElementById("rotateButton");
   const undoButton = document.getElementById("undoButton");
   const resetFogButton = document.getElementById("resetFogButton");
+  const gridSelect = document.getElementById("gridSelect");
 
   imageInput.addEventListener("change", onImageSelected);
   openPlayerButton.addEventListener("click", openOrFocusPlayerWindow);
   rotateButton.addEventListener("click", rotateImage);
   undoButton.addEventListener("click", undoLastAction);
   resetFogButton.addEventListener("click", resetFog);
+  gridSelect.addEventListener("change", () => {
+    runtime.gridMonitorInches = parseFloat(gridSelect.value) || 0;
+    renderGm();
+  });
 
   runtime.gmCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
   runtime.gmCanvas.addEventListener("mousedown", onGmPointerDown);
@@ -199,6 +208,7 @@ function onImageSelected(event) {
       runtime.state.imageWidth = image.width;
       runtime.state.imageHeight = image.height;
       runtime.state.imageRotation = 0;
+      runtime.state.image_scale = 1.0;
       runtime.state.reveals = [];
 
       const ratio = runtime.playerAspectRatio;
@@ -284,6 +294,18 @@ function onGmPointerDown(event) {
     return;
   }
 
+  const imageHit = getImageHitType(canvasPoint.x, canvasPoint.y);
+  if (imageHit.type !== "none") {
+    pushHistorySnapshot();
+    runtime.interaction = {
+      type: "image-scale",
+      handle: imageHit.type,
+      anchor: getAnchorForHandle(getScaledImageFrame(), imageHit.type),
+    };
+    setCanvasCursor(getCursorForHitType(imageHit.type));
+    return;
+  }
+
   if (viewportHit.type === "none") {
     setCanvasCursor("default");
     return;
@@ -316,7 +338,7 @@ function onGmPointerMove(event) {
   }
 
   const canvasPoint = getCanvasPointer(event, runtime.gmCanvas);
-  const hoverHit = getViewportHitType(canvasPoint.x, canvasPoint.y);
+  const hoverHit = getHitTypeAt(canvasPoint.x, canvasPoint.y);
   const hoverChanged = runtime.hoverHitType !== hoverHit.type;
   runtime.hoverHitType = hoverHit.type;
 
@@ -341,7 +363,7 @@ function onGmPointerMove(event) {
       y: pointer.y - runtime.interaction.pointerOffsetY,
     };
 
-    runtime.state.viewport = clampViewportToImage(nextViewport);
+    runtime.state.viewport = nextViewport;
     setCanvasCursor("grabbing");
     renderGm();
     return;
@@ -349,6 +371,14 @@ function onGmPointerMove(event) {
 
   if (runtime.interaction.type === "resize") {
     runtime.state.viewport = resizeViewportWithFixedAspect(runtime.interaction, pointer, runtime.playerAspectRatio);
+    setCanvasCursor(getCursorForHitType(runtime.interaction.handle));
+    renderGm();
+    return;
+  }
+
+  if (runtime.interaction.type === "image-scale") {
+    const nextScale = computeImageScaleFromPointer(runtime.interaction, canvasPoint.x, canvasPoint.y);
+    runtime.state.image_scale = nextScale;
     setCanvasCursor(getCursorForHitType(runtime.interaction.handle));
     renderGm();
     return;
@@ -399,6 +429,14 @@ function getCursorForHitType(hitType) {
     return "move";
   }
 
+  if (hitType === "image-nw" || hitType === "image-se") {
+    return "nwse-resize";
+  }
+
+  if (hitType === "image-ne" || hitType === "image-sw") {
+    return "nesw-resize";
+  }
+
   if (hitType === "nw" || hitType === "se") {
     return "nwse-resize";
   }
@@ -438,16 +476,39 @@ function getViewportHitType(canvasX, canvasY) {
   return withinRect ? { type: "move" } : { type: "none" };
 }
 
+function getImageHitType(canvasX, canvasY) {
+  const corners = getImageCornerHandles();
+  if (!corners) {
+    return { type: "none" };
+  }
+
+  for (const [handle, point] of Object.entries(corners)) {
+    if (Math.abs(canvasX - point.x) <= HANDLE_SIZE_PX && Math.abs(canvasY - point.y) <= HANDLE_SIZE_PX) {
+      return { type: handle };
+    }
+  }
+
+  return { type: "none" };
+}
+
+function getHitTypeAt(canvasX, canvasY) {
+  const imageHit = getImageHitType(canvasX, canvasY);
+  if (imageHit.type !== "none") {
+    return imageHit;
+  }
+  return getViewportHitType(canvasX, canvasY);
+}
+
 function getAnchorForHandle(viewport, handle) {
-  if (handle === "nw") {
+  if (handle === "nw" || handle === "image-nw") {
     return { x: viewport.x + viewport.width, y: viewport.y + viewport.height };
   }
 
-  if (handle === "ne") {
+  if (handle === "ne" || handle === "image-ne") {
     return { x: viewport.x, y: viewport.y + viewport.height };
   }
 
-  if (handle === "se") {
+  if (handle === "se" || handle === "image-se") {
     return { x: viewport.x, y: viewport.y };
   }
 
@@ -487,7 +548,36 @@ function resizeViewportWithFixedAspect(interaction, pointer, ratio) {
     nextViewport = { x: anchor.x - proposedWidth, y: anchor.y, width: proposedWidth, height: proposedHeight };
   }
 
-  return clampViewportToImage(nextViewport);
+  return nextViewport;
+}
+
+function computeImageScaleFromPointer(interaction, canvasX, canvasY) {
+  if (!runtime.gmTransform) {
+    return runtime.state.image_scale;
+  }
+
+  const anchor = interaction.anchor;
+  const baseWidth = runtime.gmTransform.width;
+  const baseHeight = runtime.gmTransform.height;
+  const aspect = baseWidth / baseHeight;
+
+  let widthFromPointer;
+  if (interaction.handle === "image-nw" || interaction.handle === "image-sw") {
+    widthFromPointer = anchor.x - canvasX;
+  } else {
+    widthFromPointer = canvasX - anchor.x;
+  }
+
+  let heightFromPointer;
+  if (interaction.handle === "image-nw" || interaction.handle === "image-ne") {
+    heightFromPointer = anchor.y - canvasY;
+  } else {
+    heightFromPointer = canvasY - anchor.y;
+  }
+
+  const proposedWidth = Math.max(Math.abs(widthFromPointer), Math.abs(heightFromPointer) * aspect);
+  const proposedScale = proposedWidth / baseWidth;
+  return clamp(proposedScale, MIN_IMAGE_SCALE, MAX_IMAGE_SCALE);
 }
 
 function clampViewportToImage(viewport) {
@@ -527,7 +617,9 @@ function renderGm() {
 
   try {
     drawImageWithFog(ctx);
+    drawGridOverlay(ctx);
     drawViewportOverlay(ctx);
+    drawImageScaleHandles(ctx);
     drawRevealPreview(ctx);
     drawStatusOverlay(ctx, runtime.gmCanvas);
   } catch {
@@ -536,7 +628,11 @@ function renderGm() {
 }
 
 function drawImageWithFog(ctx) {
-  const transform = runtime.gmTransform;
+  const transform = getScaledImageFrame();
+  if (!transform) {
+    return;
+  }
+
   ctx.drawImage(
     runtime.imageElement,
     0,
@@ -549,7 +645,7 @@ function drawImageWithFog(ctx) {
     transform.height,
   );
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
   ctx.fillRect(transform.x, transform.y, transform.width, transform.height);
 
   for (const reveal of runtime.state.reveals) {
@@ -566,6 +662,20 @@ function drawImageWithFog(ctx) {
       screenRect.width,
       screenRect.height,
     );
+  }
+}
+
+function drawImageScaleHandles(ctx) {
+  const corners = getImageCornerHandles();
+  if (!corners) {
+    return;
+  }
+
+  for (const [handle, point] of Object.entries(corners)) {
+    const activeHandle = runtime.interaction?.type === "image-scale" ? runtime.interaction.handle : runtime.hoverHitType;
+    const size = activeHandle === handle ? HANDLE_SIZE_PX * 1.9 : HANDLE_SIZE_PX;
+    ctx.fillStyle = activeHandle === handle ? "#6ec1ff" : "#4aaaff";
+    ctx.fillRect(point.x - size / 2, point.y - size / 2, size, size);
   }
 }
 
@@ -593,6 +703,51 @@ function drawViewportOverlay(ctx) {
     const size = activeHandle === handle ? HANDLE_SIZE_PX * 1.9 : HANDLE_SIZE_PX;
     ctx.fillRect(x - size / 2, y - size / 2, size, size);
   }
+}
+
+function drawGridOverlay(ctx) {
+  if (runtime.gridMonitorInches <= 0) {
+    return;
+  }
+
+  const viewport = imageRectToCanvasRect(runtime.state.viewport);
+  if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+    return;
+  }
+
+  const r = runtime.playerAspectRatio;
+  const sqrtTerm = Math.sqrt(r * r + 1);
+  const cellWidth = viewport.width * sqrtTerm / (runtime.gridMonitorInches * r);
+  const cellHeight = viewport.height * sqrtTerm / runtime.gridMonitorInches;
+
+  if (cellWidth < 2 || cellHeight < 2) {
+    return;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(viewport.x, viewport.y, viewport.width, viewport.height);
+  ctx.clip();
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([]);
+
+  for (let x = viewport.x; x <= viewport.x + viewport.width; x += cellWidth) {
+    ctx.beginPath();
+    ctx.moveTo(x, viewport.y);
+    ctx.lineTo(x, viewport.y + viewport.height);
+    ctx.stroke();
+  }
+
+  for (let y = viewport.y; y <= viewport.y + viewport.height; y += cellHeight) {
+    ctx.beginPath();
+    ctx.moveTo(viewport.x, y);
+    ctx.lineTo(viewport.x + viewport.width, y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function drawRevealPreview(ctx) {
@@ -627,6 +782,9 @@ function renderPlayer() {
   }
 
   const viewport = runtime.state.viewport;
+  if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+    return;
+  }
 
   for (const reveal of runtime.state.reveals) {
     const intersect = intersectRectangles(reveal, viewport);
@@ -672,28 +830,60 @@ function drawCenteredMessage(ctx, canvas, text, textColor, font) {
   const lineHeight = 24;
   const lines = text.split("\n");
   const padding = 16;
-  
-  ctx.font = font;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  
+
   let maxWidth = 0;
   for (const line of lines) {
-    const metric = ctx.measureText(line);
-    maxWidth = Math.max(maxWidth, metric.width);
+    maxWidth = Math.max(maxWidth, measureRichLine(ctx, parseRichSegments(line), font));
   }
-  
+
   const boxWidth = maxWidth + padding * 2;
   const boxHeight = lineHeight * lines.length + padding * 2;
   const boxX = centerX - boxWidth / 2;
   const boxY = centerY - boxHeight / 2;
-  
+
   ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
   ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-  
-  ctx.fillStyle = textColor;
+
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], centerX, centerY - ((lines.length - 1) * lineHeight) / 2 + i * lineHeight);
+    const lineY = centerY - ((lines.length - 1) * lineHeight) / 2 + i * lineHeight;
+    drawRichLine(ctx, parseRichSegments(lines[i]), font, centerX, lineY, textColor);
+  }
+}
+
+function parseRichSegments(text) {
+  const segments = [];
+  const parts = text.split(/(\*\*.*?\*\*)/);
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === "") {
+      continue;
+    }
+    const bold = parts[i].startsWith("**") && parts[i].endsWith("**");
+    segments.push({ text: bold ? parts[i].slice(2, -2) : parts[i], bold });
+  }
+  return segments;
+}
+
+function measureRichLine(ctx, segments, font) {
+  const boldFont = font.replace(/^\d+/, "700");
+  let width = 0;
+  for (const seg of segments) {
+    ctx.font = seg.bold ? boldFont : font;
+    width += ctx.measureText(seg.text).width;
+  }
+  return width;
+}
+
+function drawRichLine(ctx, segments, font, centerX, y, color) {
+  const boldFont = font.replace(/^\d+/, "700");
+  const totalWidth = measureRichLine(ctx, segments, font);
+  let x = centerX - totalWidth / 2;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = color;
+  for (const seg of segments) {
+    ctx.font = seg.bold ? boldFont : font;
+    ctx.fillText(seg.text, x, y);
+    x += ctx.measureText(seg.text).width;
   }
 }
 
@@ -739,36 +929,61 @@ function computeContainTransform(canvasWidth, canvasHeight, imageWidth, imageHei
   };
 }
 
-function imageRectToCanvasRect(rect) {
+function getScaledImageFrame() {
   if (!runtime.gmTransform) {
     return null;
   }
 
-  const scaleX = runtime.gmTransform.width / runtime.state.imageWidth;
-  const scaleY = runtime.gmTransform.height / runtime.state.imageHeight;
+  const scaledWidth = runtime.gmTransform.width * runtime.state.image_scale;
+  const scaledHeight = runtime.gmTransform.height * runtime.state.image_scale;
 
   return {
-    x: runtime.gmTransform.x + rect.x * scaleX,
-    y: runtime.gmTransform.y + rect.y * scaleY,
+    x: runtime.gmTransform.x + (runtime.gmTransform.width - scaledWidth) / 2,
+    y: runtime.gmTransform.y + (runtime.gmTransform.height - scaledHeight) / 2,
+    width: scaledWidth,
+    height: scaledHeight,
+  };
+}
+
+function getImageCornerHandles() {
+  const frame = getScaledImageFrame();
+  if (!frame) {
+    return null;
+  }
+
+  return {
+    "image-nw": { x: frame.x, y: frame.y },
+    "image-ne": { x: frame.x + frame.width, y: frame.y },
+    "image-se": { x: frame.x + frame.width, y: frame.y + frame.height },
+    "image-sw": { x: frame.x, y: frame.y + frame.height },
+  };
+}
+
+function imageRectToCanvasRect(rect) {
+  const frame = getScaledImageFrame();
+  if (!frame) {
+    return null;
+  }
+
+  const scaleX = frame.width / runtime.state.imageWidth;
+  const scaleY = frame.height / runtime.state.imageHeight;
+
+  return {
+    x: frame.x + rect.x * scaleX,
+    y: frame.y + rect.y * scaleY,
     width: rect.width * scaleX,
     height: rect.height * scaleY,
   };
 }
 
 function toImageCoordinates(canvasX, canvasY) {
-  if (!runtime.gmTransform) {
+  const frame = getScaledImageFrame();
+  if (!frame) {
     return null;
   }
 
-  const withinX = canvasX >= runtime.gmTransform.x && canvasX <= runtime.gmTransform.x + runtime.gmTransform.width;
-  const withinY = canvasY >= runtime.gmTransform.y && canvasY <= runtime.gmTransform.y + runtime.gmTransform.height;
-
-  if (!withinX || !withinY) {
-    return null;
-  }
-
-  const normalizedX = (canvasX - runtime.gmTransform.x) / runtime.gmTransform.width;
-  const normalizedY = (canvasY - runtime.gmTransform.y) / runtime.gmTransform.height;
+  const normalizedX = (canvasX - frame.x) / frame.width;
+  const normalizedY = (canvasY - frame.y) / frame.height;
 
   return {
     x: normalizedX * runtime.state.imageWidth,
@@ -813,6 +1028,7 @@ function undoLastAction() {
       runtime.state.imageHeight = previous.imageHeight || image.height;
       runtime.state.viewport = previous.viewport;
       runtime.state.reveals = previous.reveals;
+      runtime.state.image_scale = previous.image_scale || 1.0;
       runtime.state.imageRotation = 0;
       renderGm();
       broadcastState(true);
@@ -826,6 +1042,7 @@ function undoLastAction() {
 
   runtime.state.viewport = previous.viewport;
   runtime.state.reveals = previous.reveals;
+  runtime.state.image_scale = previous.image_scale || 1.0;
   runtime.state.imageRotation = 0;
 
   renderGm();
@@ -903,6 +1120,7 @@ function pushHistorySnapshot() {
   runtime.history.push({
     viewport: structuredClone(runtime.state.viewport),
     reveals: structuredClone(runtime.state.reveals),
+    image_scale: runtime.state.image_scale,
     imageRotation: runtime.state.imageRotation,
   });
 
@@ -919,6 +1137,7 @@ function pushRotationSnapshot() {
   runtime.history.push({
     viewport: structuredClone(runtime.state.viewport),
     reveals: structuredClone(runtime.state.reveals),
+    image_scale: runtime.state.image_scale,
     imageSrc: runtime.state.imageSrc,
     imageWidth: runtime.state.imageWidth,
     imageHeight: runtime.state.imageHeight,
@@ -947,6 +1166,7 @@ function broadcastState(forceRender) {
     imageWidth: runtime.state.imageWidth,
     imageHeight: runtime.state.imageHeight,
     imageRotation: 0,
+    image_scale: runtime.state.image_scale,
     viewport: runtime.state.viewport,
     reveals: runtime.state.reveals,
     timestamp: Date.now(),
@@ -1010,6 +1230,7 @@ function sendStateToPlayerWindow(windowRef) {
     imageSrc: runtime.state.imageSrc,
     imageWidth: runtime.state.imageWidth,
     imageHeight: runtime.state.imageHeight,
+    image_scale: runtime.state.image_scale,
     viewport: runtime.state.viewport,
     reveals: runtime.state.reveals,
     timestamp: Date.now(),
@@ -1025,7 +1246,18 @@ function handleIncomingState(payload) {
 
   runtime.state.imageWidth = payload.imageWidth || 0;
   runtime.state.imageHeight = payload.imageHeight || 0;
-  runtime.state.viewport = payload.viewport || { x: 0, y: 0, width: 0, height: 0 };
+  runtime.state.image_scale = typeof payload.image_scale === "number" ? payload.image_scale : 1.0;
+  const incomingViewport = payload.viewport;
+  runtime.state.viewport =
+    incomingViewport &&
+    Number.isFinite(incomingViewport.x) &&
+    Number.isFinite(incomingViewport.y) &&
+    Number.isFinite(incomingViewport.width) &&
+    Number.isFinite(incomingViewport.height) &&
+    incomingViewport.width > 0 &&
+    incomingViewport.height > 0
+      ? incomingViewport
+      : { x: 0, y: 0, width: 0, height: 0 };
   runtime.state.reveals = Array.isArray(payload.reveals) ? payload.reveals : [];
   runtime.state.imageRotation = 0;
 
@@ -1110,25 +1342,20 @@ function fitViewportToAspect(viewport, ratio) {
   const centerX = viewport.x + viewport.width / 2;
   const centerY = viewport.y + viewport.height / 2;
 
-  let width = viewport.width;
+  let width = Math.max(viewport.width, MIN_VIEWPORT_SIZE_PX);
   let height = width / ratio;
 
-  if (height > runtime.state.imageHeight) {
-    height = runtime.state.imageHeight;
+  if (height < MIN_VIEWPORT_SIZE_PX) {
+    height = MIN_VIEWPORT_SIZE_PX;
     width = height * ratio;
   }
 
-  if (width > runtime.state.imageWidth) {
-    width = runtime.state.imageWidth;
-    height = width / ratio;
-  }
-
-  return clampViewportToImage({
+  return {
     x: centerX - width / 2,
     y: centerY - height / 2,
     width,
     height,
-  });
+  };
 }
 
 function refreshAspectIndicator() {
@@ -1162,7 +1389,7 @@ function updateStatusOverlay() {
   if (playerOpen) {
     runtime.statusMessage = "";
   } else {
-    runtime.statusMessage = "Open player window to show the image to your player.";
+    runtime.statusMessage = "Press **Open Player Window** to show the image to your player.";
     runtime.statusLevel = "info";
   }
 }

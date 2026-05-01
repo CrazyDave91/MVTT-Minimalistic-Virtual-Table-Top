@@ -1,7 +1,4 @@
 # -*- mode: python ; coding: utf-8 -*-
-# This code was created with GitHub Copilot.
-# This codebase is released under the MIT License.
-# Use at your own risk. Provided "as is", without warranties of any kind.
 
 
 a = Analysis(

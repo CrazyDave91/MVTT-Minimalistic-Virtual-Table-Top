@@ -27,7 +27,6 @@ from state import (
     AppState,
     MIN_VIEWPORT_SIZE,
     Rect,
-    clamp_viewport,
     create_centered_viewport,
     pop_history,
     push_history,
@@ -46,6 +45,64 @@ _BUTTON_HOVER = "#f2f9ff"
 _WINDOW_MIN_WIDTH = 900
 _WINDOW_MIN_HEIGHT = 600
 _DEFAULT_PLAYER_ASPECT = 16 / 9
+_MIN_IMAGE_SCALE = 0.2
+_MAX_IMAGE_SCALE = 3.0
+
+_GRID_OPTIONS = [
+    "off",
+    '13,3" (33,8 cm)',
+    '15,6" (39,6 cm)',
+    '17,3" (43,9 cm)',
+    '21,5" (54,6 cm)',
+    '23,8" (60,5 cm)',
+    '24" (61,0 cm)',
+    '27" (68,6 cm)',
+    '28" (71,1 cm)',
+    '31,5" (80,0 cm)',
+    '32" (81,3 cm)',
+    '34" (86,4 cm)',
+    '35" (88,9 cm)',
+    '38" (96,5 cm)',
+    '40" (101,6 cm)',
+    '42" (106,7 cm)',
+    '43" (109,2 cm)',
+    '45" (114,3 cm)',
+    '48" (121,9 cm)',
+    '49" (124,5 cm)',
+    '50" (127,0 cm)',
+    '55" (139,7 cm)',
+    '58" (147,3 cm)',
+    '60" (152,4 cm)',
+    '65" (165,1 cm)',
+]
+
+_GRID_INCHES: dict[str, float] = {
+    "off": 0.0,
+    '13,3" (33,8 cm)': 13.3,
+    '15,6" (39,6 cm)': 15.6,
+    '17,3" (43,9 cm)': 17.3,
+    '21,5" (54,6 cm)': 21.5,
+    '23,8" (60,5 cm)': 23.8,
+    '24" (61,0 cm)': 24.0,
+    '27" (68,6 cm)': 27.0,
+    '28" (71,1 cm)': 28.0,
+    '31,5" (80,0 cm)': 31.5,
+    '32" (81,3 cm)': 32.0,
+    '34" (86,4 cm)': 34.0,
+    '35" (88,9 cm)': 35.0,
+    '38" (96,5 cm)': 38.0,
+    '40" (101,6 cm)': 40.0,
+    '42" (106,7 cm)': 42.0,
+    '43" (109,2 cm)': 43.0,
+    '45" (114,3 cm)': 45.0,
+    '48" (121,9 cm)': 48.0,
+    '49" (124,5 cm)': 49.0,
+    '50" (127,0 cm)': 50.0,
+    '55" (139,7 cm)': 55.0,
+    '58" (147,3 cm)': 58.0,
+    '60" (152,4 cm)': 60.0,
+    '65" (165,1 cm)': 65.0,
+}
 
 
 class GmWindow:
@@ -76,6 +133,8 @@ class GmWindow:
 
         self._player_aspect: float = _DEFAULT_PLAYER_ASPECT
         self._status_text: str = ""
+        self._grid_monitor_inches: float = 0.0
+        self._grid_var: Optional[tk.StringVar] = None
 
         self._build_window()
         self._build_toolbar()
@@ -120,6 +179,54 @@ class GmWindow:
         self._make_button(toolbar, "Reset Fog", self._on_reset_fog).pack(
             side="left", padx=3
         )
+
+        # Grid overlay dropdown — label and menu share one button-styled container
+        self._grid_var = tk.StringVar(value="off")
+        self._grid_var.trace_add("write", self._on_grid_change)
+
+        grid_frame = tk.Frame(
+            toolbar,
+            bg=_BUTTON_BG,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=_LINE,
+            bd=0,
+        )
+        grid_frame.pack(side="left", padx=(6, 3), pady=4)
+
+        tk.Label(
+            grid_frame,
+            text="Grid",
+            bg=_BUTTON_BG,
+            fg=_BUTTON_FG,
+            font=("Segoe UI", 9, "bold"),
+            padx=6,
+            pady=3,
+            cursor="hand2",
+        ).pack(side="left")
+
+        grid_menu = tk.OptionMenu(grid_frame, self._grid_var, *_GRID_OPTIONS)
+        grid_menu.configure(
+            bg=_BUTTON_BG,
+            fg=_BUTTON_FG,
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            activebackground=_BUTTON_HOVER,
+            activeforeground=_BUTTON_FG,
+            highlightthickness=0,
+            cursor="hand2",
+            padx=4,
+            pady=3,
+            bd=0,
+        )
+        grid_menu["menu"].configure(
+            bg=_BUTTON_BG,
+            fg=_BUTTON_FG,
+            font=("Segoe UI", 9, "bold"),
+            activebackground=_BUTTON_FG,
+            activeforeground=_INK,
+        )
+        grid_menu.pack(side="left")
 
         # Legend with mouse button icons
         self._lmb_photo = ImageTk.PhotoImage(left_mouse_icon(size=18))
@@ -224,6 +331,7 @@ class GmWindow:
         self._image = img
         self._state.image_width = img.width
         self._state.image_height = img.height
+        self._state.image_scale = 1.0
         self._state.reveals = []
         self._state.viewport = create_centered_viewport(
             img.width, img.height, self._player_aspect
@@ -288,13 +396,10 @@ class GmWindow:
         self._state.image_width = rotated.width
         self._state.image_height = rotated.height
 
-        # Viewport is a display specification (player aspect), not an image region.
-        # After rotation, recenter the viewport without rotating it.
-        # Preserve the current player aspect ratio.
-        self._state.viewport = create_centered_viewport(
-            rotated.width,
-            rotated.height,
-            self._player_aspect,
+        self._state.viewport = _rotate_rect_clockwise(
+            self._state.viewport,
+            old_w,
+            old_h,
         )
 
         # Reveals must be rotated with the image (they are marked on the battlemap).
@@ -317,6 +422,13 @@ class GmWindow:
         self._state.reveals = []
         self._render_gm()
         self._sync_player()
+
+    def _on_grid_change(self, *_) -> None:
+        if self._grid_var is None:
+            return
+        selected = self._grid_var.get()
+        self._grid_monitor_inches = _GRID_INCHES.get(selected, 0.0)
+        self._render_gm()
 
     # -------------------------------------------------------------------------
     # Mouse interaction handlers
@@ -342,11 +454,26 @@ class GmWindow:
         if hit == "none":
             return
 
+        push_history(self._history, self._state)
+
+        if hit.startswith("image-"):
+            image_frame = self._scaled_image_frame()
+            if image_frame is None:
+                return
+            self._interaction = {
+                "type": "image-scale",
+                "handle": hit,
+                "anchor": _anchor_for_handle(
+                    Rect(image_frame[0], image_frame[1], image_frame[2], image_frame[3]),
+                    hit,
+                ),
+            }
+            self._canvas.configure(cursor=_cursor_for_hit(hit))
+            return
+
         img_pt = self._to_image_coords(event.x, event.y)
         if img_pt is None:
             return
-
-        push_history(self._history, self._state)
 
         if hit == "move":
             self._interaction = {
@@ -388,17 +515,20 @@ class GmWindow:
                 self._state.viewport.width,
                 self._state.viewport.height,
             )
-            self._state.viewport = clamp_viewport(
-                new_vp, self._state.image_width, self._state.image_height
-            )
+            self._state.viewport = new_vp
 
         elif self._interaction["type"] == "resize":
             self._state.viewport = _resize_viewport_fixed_aspect(
                 self._interaction,
                 img_pt,
                 self._player_aspect,
-                self._state.image_width,
-                self._state.image_height,
+            )
+
+        elif self._interaction["type"] == "image-scale":
+            self._state.image_scale = _compute_image_scale_from_pointer(
+                self._interaction,
+                (event.x, event.y),
+                self._transform,
             )
 
         self._canvas.configure(
@@ -457,7 +587,15 @@ class GmWindow:
         if self._transform is None:
             return "none"
 
-        tx, ty, tw, th = self._transform
+        image_handle = self._image_hit_type(canvas_x, canvas_y)
+        if image_handle != "none":
+            return image_handle
+
+        frame = self._scaled_image_frame()
+        if frame is None:
+            return "none"
+
+        tx, ty, tw, th = frame
         scale_x = tw / self._state.image_width
         scale_y = th / self._state.image_height
         vp = self._state.viewport
@@ -484,16 +622,42 @@ class GmWindow:
         self, canvas_x: int, canvas_y: int
     ) -> Optional[tuple[float, float]]:
         """Converts canvas pixel position to image-space coordinates."""
-        if self._transform is None:
+        frame = self._scaled_image_frame()
+        if frame is None:
             return None
 
-        tx, ty, tw, th = self._transform
-        if not (tx <= canvas_x <= tx + tw and ty <= canvas_y <= ty + th):
-            return None
+        tx, ty, tw, th = frame
 
         nx = (canvas_x - tx) / tw
         ny = (canvas_y - ty) / th
         return nx * self._state.image_width, ny * self._state.image_height
+
+    def _scaled_image_frame(self) -> Optional[tuple[int, int, int, int]]:
+        if self._transform is None:
+            return None
+        tx, ty, tw, th = self._transform
+        draw_w = max(1, int(tw * self._state.image_scale))
+        draw_h = max(1, int(th * self._state.image_scale))
+        draw_x = int(tx + (tw - draw_w) / 2)
+        draw_y = int(ty + (th - draw_h) / 2)
+        return draw_x, draw_y, draw_w, draw_h
+
+    def _image_hit_type(self, canvas_x: int, canvas_y: int) -> str:
+        frame = self._scaled_image_frame()
+        if frame is None:
+            return "none"
+
+        fx, fy, fw, fh = frame
+        corners = {
+            "image-nw": (fx, fy),
+            "image-ne": (fx + fw, fy),
+            "image-se": (fx + fw, fy + fh),
+            "image-sw": (fx, fy + fh),
+        }
+        for handle, (hx, hy) in corners.items():
+            if abs(canvas_x - hx) <= HANDLE_SIZE and abs(canvas_y - hy) <= HANDLE_SIZE:
+                return handle
+        return "none"
 
     # -------------------------------------------------------------------------
     # Rendering and player sync
@@ -525,8 +689,14 @@ class GmWindow:
             self._state,
             self._image,
             interaction_preview=preview,
-            active_handle=self._hover_handle,
+            active_handle=(
+                self._interaction.get("handle")
+                if self._interaction and "handle" in self._interaction
+                else self._hover_handle
+            ),
             status_text=self._status_text,
+            grid_monitor_inches=self._grid_monitor_inches,
+            player_aspect=self._player_aspect,
         )
 
         # Store reference to prevent garbage collection by the Python runtime.
@@ -552,6 +722,10 @@ def _cursor_for_hit(hit: str) -> str:
         "se": "bottom_right_corner",
         "ne": "top_right_corner",
         "sw": "bottom_left_corner",
+        "image-nw": "top_left_corner",
+        "image-se": "bottom_right_corner",
+        "image-ne": "top_right_corner",
+        "image-sw": "bottom_left_corner",
     }.get(hit, "arrow")
 
 
@@ -561,6 +735,10 @@ def _anchor_for_handle(viewport: Rect, handle: str) -> tuple[float, float]:
         "ne": (viewport.x, viewport.y + viewport.height),
         "se": (viewport.x, viewport.y),
         "sw": (viewport.x + viewport.width, viewport.y),
+        "image-nw": (viewport.x + viewport.width, viewport.y + viewport.height),
+        "image-ne": (viewport.x, viewport.y + viewport.height),
+        "image-se": (viewport.x, viewport.y),
+        "image-sw": (viewport.x + viewport.width, viewport.y),
     }[handle]
 
 
@@ -568,8 +746,6 @@ def _resize_viewport_fixed_aspect(
     interaction: dict,
     pointer: tuple[float, float],
     ratio: float,
-    img_w: int,
-    img_h: int,
 ) -> Rect:
     """Resizes the viewport from the given corner handle, keeping aspect ratio fixed."""
     anchor = interaction["anchor"]
@@ -594,7 +770,27 @@ def _resize_viewport_fixed_aspect(
     else:  # sw
         new_vp = Rect(anchor[0] - proposed_w, anchor[1], proposed_w, proposed_h)
 
-    return clamp_viewport(new_vp, img_w, img_h)
+    return new_vp
+
+
+def _compute_image_scale_from_pointer(
+    interaction: dict,
+    canvas_point: tuple[int, int],
+    contain_transform: tuple[int, int, int, int],
+) -> float:
+    """Computes a clamped image scale from dragged image corner in canvas-space."""
+    _, _, base_w, base_h = contain_transform
+    aspect = base_w / base_h
+    anchor_x, anchor_y = interaction["anchor"]
+    pointer_x, pointer_y = canvas_point
+    handle = interaction["handle"]
+
+    width_delta = anchor_x - pointer_x if handle in ("image-nw", "image-sw") else pointer_x - anchor_x
+    height_delta = anchor_y - pointer_y if handle in ("image-nw", "image-ne") else pointer_y - anchor_y
+
+    proposed_w = max(abs(width_delta), abs(height_delta) * aspect)
+    scale = proposed_w / max(1, base_w)
+    return max(_MIN_IMAGE_SCALE, min(_MAX_IMAGE_SCALE, scale))
 
 
 def _rotate_rect_clockwise(rect: Rect, source_w: int, source_h: int) -> Rect:

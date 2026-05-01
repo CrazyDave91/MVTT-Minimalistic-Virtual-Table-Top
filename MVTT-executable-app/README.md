@@ -53,6 +53,8 @@ Output: `dist\MVTT_Battlemap.exe` — single file, no console window, no Python 
 | Revert Last | Undo last viewport move, resize, or fog reveal |
 | Reset Fog | Clears all reveals (with undo support) |
 | Fog of war | 35% black overlay; right-drag to reveal rectangular areas |
+| Image scale handles | Blue corner handles scale the image preview in GM canvas |
+| Unconstrained viewport | Red viewport can move outside image bounds; player sees black invalid regions |
 | Player fullscreen | Borderless window fills the selected monitor; Escape to close |
 | Legend | Shows distinct left/right mouse button symbols for key actions |
 
@@ -62,6 +64,7 @@ Output: `dist\MVTT_Battlemap.exe` — single file, no console window, no Python 
 |---|---|
 | Move viewport | Left-click + drag inside red rectangle |
 | Resize viewport | Left-click + drag corner handle |
+| Scale image preview | Left-click + drag blue image corner handle |
 | Reveal area | Right-click + drag |
 | Close player window | Escape (on player window) |
 

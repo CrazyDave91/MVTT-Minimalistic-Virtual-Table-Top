@@ -31,6 +31,7 @@ class AppState:
 
     image_width: int = 0
     image_height: int = 0
+    image_scale: float = 1.0
     viewport: Rect = field(default_factory=lambda: Rect(0, 0, 0, 0))
     reveals: list[Rect] = field(default_factory=list)
 
@@ -58,9 +59,10 @@ def create_centered_viewport(
 
 
 def push_history(history: list[dict], state: AppState) -> None:
-    """Saves a snapshot of viewport and reveals to history."""
+    """Saves a snapshot of viewport, reveals, and image scale to history."""
     history.append(
         {
+            "image_scale": state.image_scale,
             "viewport": deepcopy(state.viewport),
             "reveals": deepcopy(state.reveals),
         }
@@ -74,6 +76,7 @@ def pop_history(history: list[dict], state: AppState) -> bool:
     if not history:
         return False
     snapshot = history.pop()
+    state.image_scale = snapshot.get("image_scale", 1.0)
     state.viewport = snapshot["viewport"]
     state.reveals = snapshot["reveals"]
     return True

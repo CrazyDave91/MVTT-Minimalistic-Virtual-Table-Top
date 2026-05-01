@@ -185,6 +185,45 @@ body {
   color: #0f2f4e;
 }
 
+.grid-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: #d9ecff;
+  height: 32px;
+  flex-shrink: 0;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.grid-control:hover {
+  border-color: #bfe3ff;
+  background: #f2f9ff;
+}
+
+.grid-control-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #102033;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.grid-select {
+  border: none;
+  background: transparent;
+  color: #102033;
+  font-size: 0.74rem;
+  font-weight: 600;
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  line-height: 1;
+}
+
 .canvas-shell {
   position: relative;
   flex: 1;

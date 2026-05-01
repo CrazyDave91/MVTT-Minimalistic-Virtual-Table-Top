@@ -40,6 +40,37 @@
             <img class="icon-svg" src="icons/reset.svg" alt="" />
             <span class="button-text">Reset</span>
           </button>
+
+          <div class="grid-control" title="Player monitor diagonal — renders 1-inch grid inside viewport" aria-label="Grid overlay control">
+            <label for="gridSelect" class="grid-control-label">Grid</label>
+            <select id="gridSelect" class="grid-select" aria-label="Player monitor diagonal in inches for 1-inch grid">
+              <option value="0">off</option>
+              <option value="13.3">13,3" (33,8 cm)</option>
+              <option value="15.6">15,6" (39,6 cm)</option>
+              <option value="17.3">17,3" (43,9 cm)</option>
+              <option value="21.5">21,5" (54,6 cm)</option>
+              <option value="23.8">23,8" (60,5 cm)</option>
+              <option value="24">24" (61,0 cm)</option>
+              <option value="27">27" (68,6 cm)</option>
+              <option value="28">28" (71,1 cm)</option>
+              <option value="31.5">31,5" (80,0 cm)</option>
+              <option value="32">32" (81,3 cm)</option>
+              <option value="34">34" (86,4 cm)</option>
+              <option value="35">35" (88,9 cm)</option>
+              <option value="38">38" (96,5 cm)</option>
+              <option value="40">40" (101,6 cm)</option>
+              <option value="42">42" (106,7 cm)</option>
+              <option value="43">43" (109,2 cm)</option>
+              <option value="45">45" (114,3 cm)</option>
+              <option value="48">48" (121,9 cm)</option>
+              <option value="49">49" (124,5 cm)</option>
+              <option value="50">50" (127,0 cm)</option>
+              <option value="55">55" (139,7 cm)</option>
+              <option value="58">58" (147,3 cm)</option>
+              <option value="60">60" (152,4 cm)</option>
+              <option value="65">65" (165,1 cm)</option>
+            </select>
+          </div>
         </div>
 
         <div class="legend compact" aria-label="Interaction legend">
@@ -61,7 +92,7 @@
 
       <div class="canvas-shell">
         <div id="canvasStatusOverlay" class="canvas-status-overlay" aria-live="polite">
-          <div id="statusLineSecondary" class="status-line" hidden>Open player window to show the image to your player.</div>
+          <div id="statusLineSecondary" class="status-line" hidden>Press Open Player Window to show the image to your player.</div>
           <div id="statusLineCritical" class="status-line status-critical" hidden></div>
         </div>
         <canvas id="gmCanvas"></canvas>
